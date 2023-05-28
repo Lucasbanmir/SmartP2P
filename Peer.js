@@ -4,6 +4,7 @@ module.exports = class Peer {
 	constructor(port, username) {
 		this.port = port;
 		this.username = username;
+		this.logs = [];
 		this.connections = [];
 		
 		const server = net.createServer( (socket) => {
@@ -32,6 +33,8 @@ module.exports = class Peer {
 		);
 
 		socket.on('close', () => {
+			console.log("Alguém desconectou!");
+
 			this.connections = this.connections.filter( conn => {
 				return conn !== socket;
 			})
@@ -46,5 +49,9 @@ module.exports = class Peer {
 
 	broadcast(data) {
 		this.connections.forEach( socket => socket.write(data) )
+	}
+
+	onMessage(data) {
+		this.logs.push(data)
 	}
 }
