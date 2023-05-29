@@ -11,7 +11,7 @@ module.exports = class Peer {
 			this.onSocketConnected(socket)
 		});
 
-		server.listen(port, () => console.log("Ouvindo porta " + port) )
+		server.listen(port, () => console.log("Ouvindo porta " + port) );
 	}
 
 	connectTo(address) {
@@ -33,8 +33,6 @@ module.exports = class Peer {
 		);
 
 		socket.on('close', () => {
-			console.log("Alguém desconectou!");
-
 			this.connections = this.connections.filter( conn => {
 				return conn !== socket;
 			})
@@ -47,11 +45,11 @@ module.exports = class Peer {
 
 	onData(socket, data) {}
 
-	broadcast(data) {
-		this.connections.forEach( socket => socket.write(data) )
+	onMessage(data) {
+		this.logs.push(data);
 	}
 
-	onMessage(data) {
-		this.logs.push(data)
+	broadcast(data) {
+		this.connections.forEach( socket => socket.write(data) );
 	}
 }

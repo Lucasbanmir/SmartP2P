@@ -5,10 +5,13 @@ const fs = require('fs');
 const path = require('path');
 
 const logsDir = path.join(__dirname, 'logs');
+const downloadsDir = path.join(__dirname, 'downloads');
 
-if (!fs.existsSync(logsDir)) {
+if (!fs.existsSync(logsDir))
 	fs.mkdirSync(logsDir);
-}
+
+if (!fs.existsSync(downloadsDir))
+	fs.mkdirSync(downloadsDir);
 		
 const port = process.env.PORT;
 const username = process.env.USERNAME;
@@ -42,27 +45,25 @@ process.stdin.on('data', data => {
 	const signature = sha(message + myKey + Date.now());
 	receivedMessageSignatures.push(signature);
 
-	if (message !== './log') {
+	if (message !== './log')
 		peer.onMessage(`${username}:${port} => ${message}`);
-	}
 
 	if (message === './log') {
-    const logFilePath = path.join(logsDir, `${username}-${port}.txt`);
-    const logFileContent = peer.logs.join('\n');
-    fs.writeFileSync(logFilePath, logFileContent);
-    console.log(`Logs salvos em ${logFilePath}`);
-  } else if (message.split(' ')[0] === './send' && message.split(' ').length === 2) {
-		const filePath = message.split(" ")[1];
+		const logFilePath = path.join(logsDir, `${username}-${port}.txt`);
+		const logFileContent = peer.logs.join('\n');
+		fs.writeFileSync(logFilePath, logFileContent);
+		console.log(`Logs salvos em ${logFilePath}`);
+  	} else if (message.startsWith('./send ')) {
+		const filePath = message.slice(7);
 
 		try {
 			const fileData = fs.readFileSync(filePath);
-	
 			const fileName = filePath.split('/').pop();
 	
 			const filePayload = {
+				signature,
 				username,
 				port,
-				command: 'send',
 				fileName,
 				fileBuffer: fileData,
 				isSendCommand: true
@@ -77,22 +78,27 @@ process.stdin.on('data', data => {
 			}
 			receivedFiles.push(file);
 
-			console.log(`Arquivo "${fileName}" enviado com sucesso.`);
+			console.log(`Arquivo "${fileName}" enviado com sucesso!`);
 		} catch (error) {
-			console.error('Erro ao ler o arquivo:', error);
+			console.error('Erro ao ler o arquivo: ', error);
 		}
-	} else if (message.split(' ')[0] === './download' && message.split(' ').length === 2) {
-		const fileName = message.split(" ")[1];
+	} else if (message.startsWith('./download ')) {
+		const fileName = message.slice(11);
 
-		const file = receivedFiles.find(file => {
-			return file.fileName === fileName
-		});
+		const file = receivedFiles.find(file => file.fileName === fileName);
 
 		if (file) {
-			const filePath = path.join(__dirname, fileName);
+			const filePath = path.join(downloadsDir, fileName);
 			fs.writeFileSync(filePath, file.fileBuffer);
-			console.log(`Arquivo "${fileName}" baixado com sucesso.`);
+			console.log(`Arquivo "${fileName}" baixado com sucesso!`);
+		} else {
+			console.log(`Arquivo "${fileName}" não existe ou não foi recebido!`);
 		}
+	} else if (message === './close') {
+		peer.broadcast(JSON.stringify({ signature, message, username, port, isClosed: true }))
+
+        peer.connections.forEach(socket => socket.end());
+        console.log('Desconectado de todos os peers!');
 	} else {
 		peer.broadcast(JSON.stringify({ signature, message, username, port }));
 	}
@@ -114,21 +120,26 @@ peer.onData = (socket, data) => {
 		peer.onMessage(payload.message);
 		console.log(payload.message);
 	} else if (payload.isSendCommand) {
+
 		if (payload.username !== username || payload.port !== port) {
-      console.log(`${payload.username}:${payload.port} enviou o arquivo ${payload.fileName}`);
+      		console.log(`${payload.username}:${payload.port} enviou o arquivo ${payload.fileName}`);
 
 			const fileBuffer = Buffer.from(payload.fileBuffer, 'base64');
-
-      const file = {
-        fileName: payload.fileName,
-        fileBuffer
-      }
-      receivedFiles.push(file);
-    }
+			const file = {
+				fileName: payload.fileName,
+				fileBuffer
+			}
+			receivedFiles.push(file);
+    	}
+	} else if (payload.isClosed) {
+		const output = `${payload.username}:${payload.port} saiu do chat`
+		peer.onMessage(output);
+		console.log(output);
 	} else {
-		peer.onMessage(`${payload.username}:${payload.port} => ${payload.message}`);
-		console.log(`${payload.username}:${payload.port} => ${payload.message}`);
+		const output = `${payload.username}:${payload.port} => ${payload.message}`
+		peer.onMessage(output);
+		console.log(output);
 	}
-		
+	
 	peer.broadcast(json);
 };
